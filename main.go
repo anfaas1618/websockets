@@ -4,6 +4,7 @@ import (
 	"embed"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 
@@ -26,6 +27,7 @@ func main() {
 	secret := getEnv("GITHUB_WEBHOOK_SECRET", "")
 	certFile := getEnv("TLS_CERT", "")
 	keyFile := getEnv("TLS_KEY", "")
+	httpRedirAddr := getEnv("HTTP_ADDR", "")
 
 	h := hub.New()
 	go h.Run()
@@ -70,6 +72,22 @@ func main() {
 	log.Printf("[server] websocket  : %s://... /ws", map[bool]string{true: "wss", false: "ws"}[useTLS])
 	if useTLS {
 		log.Printf("[server] cert       : %s", certFile)
+		if httpRedirAddr != "" {
+			log.Printf("[server] HTTP→HTTPS redirect : %s", httpRedirAddr)
+			go func() {
+				redir := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					host := r.Host
+					if h, _, err := net.SplitHostPort(host); err == nil {
+						host = h
+					}
+					target := "https://" + host + addr + r.RequestURI
+					http.Redirect(w, r, target, http.StatusMovedPermanently)
+				})
+				if err := http.ListenAndServe(httpRedirAddr, redir); err != nil {
+					log.Fatalf("[server] HTTP redirect fatal: %v", err)
+				}
+			}()
+		}
 		if err := http.ListenAndServeTLS(addr, certFile, keyFile, mux); err != nil {
 			log.Fatalf("[server] fatal: %v", err)
 		}
