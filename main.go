@@ -24,8 +24,8 @@ var upgrader = websocket.Upgrader{
 func main() {
 	addr := getEnv("ADDR", ":443")
 	secret := getEnv("GITHUB_WEBHOOK_SECRET", "")
-	certFile := getEnv("TLS_CERT", "certs/cert.pem")
-	keyFile := getEnv("TLS_KEY", "certs/key.pem")
+	certFile := getEnv("TLS_CERT", "")
+	keyFile := getEnv("TLS_KEY", "")
 
 	h := hub.New()
 	go h.Run()
@@ -60,13 +60,24 @@ func main() {
 	// GET /          — dashboard UI
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
-	log.Printf("[server] dashboard  : https://0.0.0.0%s/", addr)
+	useTLS := certFile != "" && keyFile != ""
+	scheme := "http"
+	if useTLS {
+		scheme = "https"
+	}
+	log.Printf("[server] dashboard  : %s://0.0.0.0%s/", scheme, addr)
 	log.Printf("[server] webhook    : POST /webhook")
-	log.Printf("[server] websocket  : wss://... /ws")
-	log.Printf("[server] cert       : %s", certFile)
-
-	if err := http.ListenAndServeTLS(addr, certFile, keyFile, mux); err != nil {
-		log.Fatalf("[server] fatal: %v", err)
+	log.Printf("[server] websocket  : %s://... /ws", map[bool]string{true: "wss", false: "ws"}[useTLS])
+	if useTLS {
+		log.Printf("[server] cert       : %s", certFile)
+		if err := http.ListenAndServeTLS(addr, certFile, keyFile, mux); err != nil {
+			log.Fatalf("[server] fatal: %v", err)
+		}
+	} else {
+		log.Printf("[server] TLS        : disabled (set TLS_CERT and TLS_KEY to enable)")
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			log.Fatalf("[server] fatal: %v", err)
+		}
 	}
 }
 

@@ -3,12 +3,16 @@ services:
     build: .
     ports:
       - "8080:8080"
+    volumes:
+      - ./certs:/certs:ro
     environment:
       ADDR: ":8080"
       GITHUB_WEBHOOK_SECRET: "${GITHUB_WEBHOOK_SECRET:-}"
+      TLS_CERT: /certs/cert.pem
+      TLS_KEY: /certs/key.pem
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- --no-check-certificate https://localhost:8080/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3

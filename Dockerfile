@@ -10,11 +10,13 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
 
 # ── runtime stage ─────────────────────────────────────────────────────────────
-FROM scratch
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates wget
 
 COPY --from=builder /app/server /server
 
 # certs are mounted at runtime via -v or fly.io secrets/volumes
-EXPOSE 443
+EXPOSE 8080
 
 ENTRYPOINT ["/server"]
