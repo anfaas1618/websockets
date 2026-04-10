@@ -1,0 +1,35 @@
+# fly.toml — https://fly.io/docs/reference/configuration/
+app = "github-actions-live"
+primary_region = "iad"   # Washington DC; change to the region nearest you
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ADDR = ":8080"
+
+[http_service]
+  internal_port       = 8080
+  force_https         = true
+  auto_stop_machines  = false   # keep alive for persistent WebSocket connections
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type       = "connections"
+    hard_limit = 1000
+    soft_limit = 800
+
+[[vm]]
+  size   = "shared-cpu-1x"
+  memory = "256mb"
+
+[checks]
+  [checks.health]
+    grace_period = "5s"
+    interval     = "15s"
+    method       = "GET"
+    path         = "/healthz"
+    port         = 8080
+    timeout      = "5s"
+    type         = "http"

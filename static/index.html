@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub Actions Live</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --blue: #388bfd;
+      --purple: #bc8cff;
+      --orange: #ffa657;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header svg { flex-shrink: 0; }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    #status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--yellow);
+      transition: background 0.3s;
+    }
+    #status-dot.connected { background: var(--green); }
+    #status-dot.error     { background: var(--red); }
+
+    #counter {
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2px 10px;
+    }
+
+    #clear-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #clear-btn:hover { color: var(--text); border-color: var(--text); }
+
+    #events {
+      flex: 1;
+      padding: 16px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+    }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-state svg { opacity: 0.3; }
+    .empty-state p { font-size: 13px; max-width: 320px; line-height: 1.6; }
+
+    .event-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 8px 12px;
+      align-items: start;
+      animation: slideIn 0.18s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .event-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .event-main { min-width: 0; }
+
+    .event-title {
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .event-type {
+      font-family: ui-monospace, "SFMono-Regular", monospace;
+      font-size: 11px;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-weight: 500;
+    }
+
+    .event-meta {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 4px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .event-time {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .event-details {
+      grid-column: 1 / -1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: ui-monospace, "SFMono-Regular", monospace;
+      font-size: 11px;
+      color: var(--muted);
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre;
+      display: none;
+    }
+
+    .event-card.expanded .event-details { display: block; }
+
+    .expand-btn {
+      grid-column: 1 / -1;
+      background: none;
+      border: none;
+      color: var(--blue);
+      font-size: 11px;
+      cursor: pointer;
+      text-align: left;
+      padding: 0;
+      margin-top: 2px;
+    }
+    .expand-btn:hover { text-decoration: underline; }
+
+    /* color map */
+    .et-workflow_run      { background: #1f2d3d; color: var(--blue); }
+    .et-workflow_job      { background: #1f2d3d; color: var(--blue); }
+    .et-workflow_dispatch { background: #1f2d3d; color: var(--purple); }
+    .et-push              { background: #1a2d1a; color: var(--green); }
+    .et-pull_request      { background: #2d1f1f; color: var(--orange); }
+    .et-check_run         { background: #1f2d2d; color: #39d3d3; }
+    .et-check_suite       { background: #1f2d2d; color: #39d3d3; }
+    .et-deployment        { background: #2d1f2d; color: var(--purple); }
+    .et-deployment_status { background: #2d1f2d; color: var(--purple); }
+    .et-release           { background: #2d2a1a; color: var(--yellow); }
+    .et-ping              { background: #1e1e2e; color: var(--muted); }
+    .et-default           { background: #1e1e1e; color: var(--muted); }
+
+    .icon-workflow_run      { background: #1f2d3d; }
+    .icon-push              { background: #1a2d1a; }
+    .icon-pull_request      { background: #2d1f1f; }
+    .icon-check_run         { background: #1f2d2d; }
+    .icon-deployment        { background: #2d1f2d; }
+    .icon-release           { background: #2d2a1a; }
+    .icon-default           { background: #1e1e1e; }
+
+    .conclusion-success  { color: var(--green); }
+    .conclusion-failure  { color: var(--red); }
+    .conclusion-cancelled{ color: var(--muted); }
+    .conclusion-skipped  { color: var(--muted); }
+    .status-in_progress  { color: var(--yellow); }
+    .status-queued       { color: var(--muted); }
+    .status-completed    { color: var(--green); }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="20" height="20" viewBox="0 0 16 16" fill="var(--text)">
+    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+             0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+             -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+             .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+             -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+             .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+             .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+             0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+  </svg>
+  <h1>GitHub Actions &mdash; Live Feed</h1>
+  <span id="counter">0 events</span>
+  <button id="clear-btn">Clear</button>
+  <div id="status-badge">
+    <div id="status-dot"></div>
+    <span id="status-label">Connecting…</span>
+  </div>
+</header>
+
+<div id="events">
+  <div class="empty-state" id="empty">
+    <svg width="48" height="48" viewBox="0 0 16 16" fill="var(--muted)">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+               0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+               -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+               .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+               -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+               .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+               .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+               0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+    </svg>
+    <p>Waiting for GitHub events…<br/>Configure your webhook to point at <code>/webhook</code>.</p>
+  </div>
+</div>
+
+<script>
+  const ICONS = {
+    workflow_run:      '⚙️',
+    workflow_job:      '🔧',
+    workflow_dispatch: '▶️',
+    push:              '📦',
+    pull_request:      '🔀',
+    pull_request_review: '👁️',
+    check_run:         '✅',
+    check_suite:       '🧪',
+    deployment:        '🚀',
+    deployment_status: '🚀',
+    release:           '🏷️',
+    status:            '🔔',
+    ping:              '🏓',
+    create:            '✨',
+    delete:            '🗑️',
+  };
+
+  let count = 0;
+  const eventsEl = document.getElementById('events');
+  const emptyEl  = document.getElementById('empty');
+  const counterEl = document.getElementById('counter');
+  const dotEl    = document.getElementById('status-dot');
+  const labelEl  = document.getElementById('status-label');
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    count = 0;
+    counterEl.textContent = '0 events';
+    eventsEl.querySelectorAll('.event-card').forEach(c => c.remove());
+    emptyEl.style.display = '';
+  });
+
+  function setStatus(state, text) {
+    dotEl.className = state;
+    labelEl.textContent = text;
+  }
+
+  function extractMeta(eventType, payload) {
+    const p = payload || {};
+    const parts = [];
+
+    if (p.repository?.full_name) parts.push('📁 ' + p.repository.full_name);
+
+    if (eventType === 'workflow_run' && p.workflow_run) {
+      const wr = p.workflow_run;
+      parts.push('Workflow: ' + wr.name);
+      if (wr.conclusion) parts.push(statusSpan(wr.conclusion, 'conclusion'));
+      else if (wr.status) parts.push(statusSpan(wr.status, 'status'));
+    } else if (eventType === 'workflow_job' && p.workflow_job) {
+      const wj = p.workflow_job;
+      parts.push('Job: ' + wj.name);
+      if (wj.conclusion) parts.push(statusSpan(wj.conclusion, 'conclusion'));
+      else if (wj.status) parts.push(statusSpan(wj.status, 'status'));
+    } else if (eventType === 'push') {
+      if (p.ref) parts.push('Ref: ' + p.ref.replace('refs/heads/', ''));
+      if (p.head_commit?.message) parts.push(truncate(p.head_commit.message, 60));
+    } else if (eventType.startsWith('pull_request')) {
+      if (p.pull_request) {
+        parts.push('#' + p.pull_request.number + ' ' + truncate(p.pull_request.title, 50));
+        parts.push(statusSpan(p.action || '', 'status'));
+      }
+    } else if (eventType === 'deployment_status' && p.deployment_status) {
+      parts.push(statusSpan(p.deployment_status.state, 'status'));
+      if (p.deployment?.environment) parts.push('env: ' + p.deployment.environment);
+    } else if (eventType === 'release' && p.release) {
+      parts.push(p.release.tag_name);
+      parts.push(statusSpan(p.action || '', 'status'));
+    }
+
+    return parts;
+  }
+
+  function statusSpan(val, kind) {
+    return `<span class="${kind}-${val}">${val}</span>`;
+  }
+
+  function truncate(str, n) {
+    return str.length > n ? str.slice(0, n) + '…' : str;
+  }
+
+  function colorClass(et) {
+    const map = {
+      workflow_run: 'et-workflow_run', workflow_job: 'et-workflow_job',
+      workflow_dispatch: 'et-workflow_dispatch', push: 'et-push',
+      pull_request: 'et-pull_request', check_run: 'et-check_run',
+      check_suite: 'et-check_suite', deployment: 'et-deployment',
+      deployment_status: 'et-deployment_status', release: 'et-release',
+      ping: 'et-ping',
+    };
+    return map[et] || 'et-default';
+  }
+
+  function renderEvent(evt) {
+    emptyEl.style.display = 'none';
+    count++;
+    counterEl.textContent = count + ' event' + (count !== 1 ? 's' : '');
+
+    const card = document.createElement('div');
+    card.className = 'event-card';
+
+    const icon = ICONS[evt.event_type] || '📡';
+    const meta = extractMeta(evt.event_type, evt.payload);
+    const now  = new Date().toLocaleTimeString();
+
+    card.innerHTML = `
+      <div class="event-icon icon-${evt.event_type || 'default'}">${icon}</div>
+      <div class="event-main">
+        <div class="event-title">
+          <span class="event-type ${colorClass(evt.event_type)}">${evt.event_type || 'unknown'}</span>
+          ${evt.delivery ? `<span style="color:var(--muted);font-size:11px;font-family:monospace">${evt.delivery.slice(0,8)}…</span>` : ''}
+        </div>
+        <div class="event-meta">${meta.join(' · ')}</div>
+        <button class="expand-btn">Show payload ▾</button>
+        <pre class="event-details">${JSON.stringify(evt.payload, null, 2)}</pre>
+      </div>
+      <div class="event-time">${now}</div>
+    `;
+
+    card.querySelector('.expand-btn').addEventListener('click', function () {
+      const expanded = card.classList.toggle('expanded');
+      this.textContent = expanded ? 'Hide payload ▴' : 'Show payload ▾';
+    });
+
+    // prepend so newest is at top
+    eventsEl.insertBefore(card, eventsEl.firstChild);
+  }
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+    ws.addEventListener('open', () => setStatus('connected', 'Connected'));
+    ws.addEventListener('close', () => {
+      setStatus('error', 'Disconnected — retrying…');
+      setTimeout(connect, 3000);
+    });
+    ws.addEventListener('error', () => setStatus('error', 'Error'));
+    ws.addEventListener('message', e => {
+      try { renderEvent(JSON.parse(e.data)); } catch (_) {}
+    });
+  }
+
+  connect();
+</script>
+</body>
+</html>

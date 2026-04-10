@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -59,8 +60,27 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	delivery := r.Header.Get("X-GitHub-Delivery")
 
 	// Decode the raw payload.
+	// GitHub sends JSON directly for application/json, or as a "payload" form
+	// field for application/x-www-form-urlencoded.
+	// Restore the body so ParseForm can read it.
+	jsonBody := body
+	ct := r.Header.Get("Content-Type")
+	if strings.Contains(ct, "application/x-www-form-urlencoded") {
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "failed to parse form", http.StatusBadRequest)
+			return
+		}
+		encoded := r.FormValue("payload")
+		if encoded == "" {
+			http.Error(w, "missing payload field", http.StatusBadRequest)
+			return
+		}
+		jsonBody = []byte(encoded)
+	}
+
 	var payload any
-	if err := json.Unmarshal(body, &payload); err != nil {
+	if err := json.Unmarshal(jsonBody, &payload); err != nil {
 		http.Error(w, "invalid JSON payload", http.StatusBadRequest)
 		return
 	}
