@@ -6,10 +6,12 @@ primary_region = "iad"   # Washington DC; change to the region nearest you
   dockerfile = "Dockerfile"
 
 [env]
-  ADDR = ":8080"
+  ADDR     = ":443"
+  TLS_CERT = "/certs/cert.pem"
+  TLS_KEY  = "/certs/key.pem"
 
 [http_service]
-  internal_port       = 8080
+  internal_port       = 443
   force_https         = true
   auto_stop_machines  = false   # keep alive for persistent WebSocket connections
   auto_start_machines = true
@@ -30,6 +32,6 @@ primary_region = "iad"   # Washington DC; change to the region nearest you
     interval     = "15s"
     method       = "GET"
     path         = "/healthz"
-    port         = 8080
+    port         = 443
     timeout      = "5s"
     type         = "http"

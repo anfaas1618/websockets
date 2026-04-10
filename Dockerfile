@@ -14,6 +14,7 @@ FROM scratch
 
 COPY --from=builder /app/server /server
 
-EXPOSE 8080
+# certs are mounted at runtime via -v or fly.io secrets/volumes
+EXPOSE 443
 
 ENTRYPOINT ["/server"]

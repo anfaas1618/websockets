@@ -18,20 +18,20 @@ var staticFiles embed.FS
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// Allow all origins; restrict in production.
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 func main() {
-	addr := getEnv("ADDR", ":8080")
+	addr := getEnv("ADDR", ":443")
 	secret := getEnv("GITHUB_WEBHOOK_SECRET", "")
+	certFile := getEnv("TLS_CERT", "certs/cert.pem")
+	keyFile := getEnv("TLS_KEY", "certs/key.pem")
 
 	h := hub.New()
 	go h.Run()
 
 	whHandler := webhook.New(secret, h)
 
-	// Serve static/ as the root file system.
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		log.Fatalf("failed to sub static fs: %v", err)
@@ -57,15 +57,15 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// GET /          — dashboard UI (embedded static files)
+	// GET /          — dashboard UI
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
-	log.Printf("[server] listening on %s", addr)
-	log.Printf("[server] dashboard  : GET  /")
+	log.Printf("[server] dashboard  : https://0.0.0.0%s/", addr)
 	log.Printf("[server] webhook    : POST /webhook")
-	log.Printf("[server] websocket  : GET  /ws")
+	log.Printf("[server] websocket  : wss://... /ws")
+	log.Printf("[server] cert       : %s", certFile)
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServeTLS(addr, certFile, keyFile, mux); err != nil {
 		log.Fatalf("[server] fatal: %v", err)
 	}
 }
